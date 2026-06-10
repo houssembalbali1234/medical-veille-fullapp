@@ -1,0 +1,112 @@
+# ─────────────────────────────────────────
+# 🔐 SECRETS — ne jamais committer
+# ─────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# ─────────────────────────────────────────
+# 🐍 PYTHON / BACKEND
+# ─────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Tests & coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+
+# ─────────────────────────────────────────
+# 🎨 FRONTEND (React / Vue / Angular)
+# ─────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.cache/
+frontend/.parcel-cache/
+frontend/coverage/
+
+# Logs npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─────────────────────────────────────────
+# 🐳 DOCKER
+# ─────────────────────────────────────────
+# Garder docker-compose.yml mais ignorer les overrides locaux
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ─────────────────────────────────────────
+# ☸️  KUBERNETES
+# ─────────────────────────────────────────
+# Ignorer les fichiers de secrets k8s générés localement
+k8s/secrets/
+k8s/*.local.yml
+
+# ─────────────────────────────────────────
+# 📊 MONITORING
+# ─────────────────────────────────────────
+monitoring/data/
+monitoring/grafana/data/
+monitoring/prometheus/data/
+
+# ─────────────────────────────────────────
+# 🖥️  OS & ÉDITEURS
+# ─────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+!.vscode/extensions.json   # OK de partager les extensions recommandées
+
+# JetBrains (PyCharm, WebStorm...)
+.idea/
+*.iml
+
+# ─────────────────────────────────────────
+# 📝 LOGS & TEMPORAIRES
+# ─────────────────────────────────────────
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo

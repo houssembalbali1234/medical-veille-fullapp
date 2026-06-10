@@ -1,0 +1,517 @@
+# ============================================================
+# MEDICAL VEILLE — STACK COMPLETE
+# ============================================================
+# Demarrage : docker compose up -d
+# Logs :      docker compose logs -f api
+# Arret :     docker compose down
+# Reset data: docker compose down -v
+# ============================================================
+
+networks:
+  medveille:
+    name: medveille_network
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+  elastic_data:
+  qdrant_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+  grafana_data:
+
+services:
+
+  # ============================================================
+  # POSTGRESQL 16
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: medveille_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: meduser
+      POSTGRES_PASSWORD: medpassword
+      POSTGRES_DB: medical_veille
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meduser -d medical_veille"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ============================================================
+  # MONGODB 7
+  # ============================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: medveille_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: meduser
+      MONGO_INITDB_ROOT_PASSWORD: medpassword
+      MONGO_INITDB_DATABASE: medical_veille
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ============================================================
+  # REDIS 7
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: medveille_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # RABBITMQ 3
+  # ============================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: medveille_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: meduser
+      RABBITMQ_DEFAULT_PASS: medpassword
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # ELASTICSEARCH 8
+  # ============================================================
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: medveille_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=medveille-cluster
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"' || exit 1"]
+      interval: 20s
+      timeout: 15s
+      retries: 15
+      start_period: 90s
+
+  # ============================================================
+  # QDRANT — Base vectorielle
+  # ============================================================
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: medveille_qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    networks:
+      - medveille
+
+  # ============================================================
+  # ZOOKEEPER
+  # ============================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: medveille_zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=*"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    ports:
+      - "2181:2181"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # APACHE KAFKA
+  # ============================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: medveille_kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_NUM_PARTITIONS: 3
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    networks:
+      - medveille
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # FASTAPI
+  # ============================================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medveille_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://meduser:medpassword@postgres:5432/medical_veille
+      MONGO_URL: mongodb://meduser:medpassword@mongodb:27017/medical_veille?authSource=admin
+      REDIS_URL: redis://redis:6379/0
+      ELASTIC_URL: http://elasticsearch:9200
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      QDRANT_URL: http://qdrant:6333
+      KAFKA_URL: kafka:29092
+      RABBITMQ_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - medveille
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+
+  # ============================================================
+  # CELERY WORKER
+  # ============================================================
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medveille_celery_worker
+    restart: unless-stopped
+    command: >
+      celery -A app.celery_beat worker
+      --loglevel=info
+      --concurrency=4
+      -Q scraping,ai,indexing,notifications,maintenance,celery
+      --hostname=worker@%h
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://meduser:medpassword@postgres:5432/medical_veille
+      MONGO_URL: mongodb://meduser:medpassword@mongodb:27017/medical_veille?authSource=admin
+      REDIS_URL: redis://redis:6379/0
+      ELASTIC_URL: http://elasticsearch:9200
+      QDRANT_URL: http://qdrant:6333
+      KAFKA_URL: kafka:29092
+      RABBITMQ_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      API_INTERNAL_URL: http://api:8000
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - medveille
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  # ============================================================
+  # CELERY BEAT
+  # ============================================================
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medveille_celery_beat
+    restart: unless-stopped
+    command: >
+      celery -A app.celery_beat beat
+      --loglevel=info
+      --scheduler celery.beat.PersistentScheduler
+      --schedule=/tmp/celerybeat-schedule
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      MONGO_URL: mongodb://meduser:medpassword@mongodb:27017/medical_veille?authSource=admin
+      RABBITMQ_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      API_INTERNAL_URL: http://api:8000
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - medveille
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+  # ============================================================
+  # KAFKA CONSUMER
+  # ============================================================
+  kafka_consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medveille_kafka_consumer
+    restart: unless-stopped
+    command: python -m app.kafka_consumer
+    env_file:
+      - .env
+    environment:
+      MONGO_URL: mongodb://meduser:medpassword@mongodb:27017/medical_veille?authSource=admin
+      ELASTIC_URL: http://elasticsearch:9200
+      QDRANT_URL: http://qdrant:6333
+      KAFKA_URL: kafka:29092
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - medveille
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  # ============================================================
+  # FLOWER — monitoring Celery
+  # http://localhost:5555
+  # ============================================================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medveille_flower
+    restart: unless-stopped
+    command: >
+      celery -A app.celery_beat flower
+      --port=5555
+      --broker=amqp://meduser:medpassword@rabbitmq:5672//
+      --broker_api=http://meduser:medpassword@rabbitmq:15672/api/
+      --persistent=True
+      --db=/tmp/flower.db
+    env_file:
+      - .env
+    environment:
+      CELERY_BROKER_URL: amqp://meduser:medpassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    ports:
+      - "5555:5555"
+    networks:
+      - medveille
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+  # ============================================================
+  # NGINX — reverse proxy
+  # ============================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: medveille_nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    networks:
+      - medveille
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================
+  # MONGO EXPRESS — Interface web MongoDB
+  # http://localhost:8081
+  # ============================================================
+  mongo_express:
+    image: mongo-express:latest
+    container_name: medveille_mongo_express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: meduser
+      ME_CONFIG_MONGODB_ADMINPASSWORD: medpassword
+      ME_CONFIG_MONGODB_URL: mongodb://meduser:medpassword@mongodb:27017/medical_veille?authSource=admin
+      ME_CONFIG_BASICAUTH: false
+    ports:
+      - "8081:8081"
+    networks:
+      - medveille
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # ============================================================
+  # PGADMIN — Interface web PostgreSQL
+  # http://localhost:5050
+  # ============================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: medveille_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - medveille
+    depends_on:
+      - postgres
+
+  # ============================================================
+  # PROMETHEUS — Collecte de métriques
+  # http://localhost:9090
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: medveille_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - medveille
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+
+  # ============================================================
+  # GRAFANA — Visualisation des métriques
+  # http://localhost:3001
+  # Login: admin / admin
+  # ============================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: medveille_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    ports:
+      - "3001:3000"
+    networks:
+      - medveille
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana

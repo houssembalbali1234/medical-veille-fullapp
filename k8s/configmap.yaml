@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medical-veille-config
+  namespace: medical-veille
+data:
+  MONGO_DB: medical_veille
+  ELASTIC_URL: http://elasticsearch:9200
+  QDRANT_URL: http://qdrant:6333
+  APP_URL: http://localhost:3000
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"

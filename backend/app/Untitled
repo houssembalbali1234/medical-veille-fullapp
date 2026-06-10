@@ -1,0 +1,23 @@
+from celery import Celery
+import os
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+celery_app = Celery(
+    "medical_veille",
+    broker=REDIS_URL,
+    backend=REDIS_URL,
+)
+
+@celery_app.task
+def scrape_pubmed(keyword: str):
+    from Bio import Entrez
+    Entrez.email = "test@example.com"
+    handle = Entrez.esearch(db="pubmed", term=keyword, retmax=10)
+    record = Entrez.read(handle)
+    ids = record["IdList"]
+    articles = []
+    for pmid in ids:
+        fetch = Entrez.efetch(db="pubmed", id=pmid, rettype="abstract", retmode="text")
+        articles.append({"pmid": pmid, "abstract": fetch.read()})
+    return articles

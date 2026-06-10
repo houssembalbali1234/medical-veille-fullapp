@@ -1,0 +1,99 @@
+# ============================================================
+# 🚀 FASTAPI — Framework web async
+# ============================================================
+fastapi
+uvicorn[standard]         # WebSocket + hot-reload (sans [standard] = pas de WS)
+python-multipart          # Upload fichiers via FastAPI
+
+# ============================================================
+# 🐘 POSTGRESQL — ORM async
+# ============================================================
+sqlalchemy[asyncio]
+asyncpg                   # Driver PostgreSQL async (requis par SQLAlchemy async)
+
+# ============================================================
+# 🔐 AUTH — JWT + bcrypt
+# ============================================================
+python-jose[cryptography] # JWT encode/decode
+passlib[bcrypt]           # Hash des mots de passe
+bcrypt==4.0.1             # Version fixée (compatibilité passlib)
+python-dotenv             # Lecture du fichier .env
+pydantic-settings         # Settings depuis variables d'environnement
+pydantic[email]           # Validation email (EmailStr)
+
+# ============================================================
+# 🐰 CELERY + RABBITMQ — Tâches asynchrones
+# ============================================================
+celery[redis]             # Celery avec support Redis backend
+kombu                     # Messaging library (dépendance Celery + RabbitMQ)
+amqp                      # Protocole AMQP pour RabbitMQ
+
+# ============================================================
+# 🍃 MONGODB — Drivers
+# ============================================================
+motor                     # Driver MongoDB async (pour FastAPI)
+pymongo                   # Driver MongoDB sync (pour Celery)
+
+# ============================================================
+# 🔴 REDIS — Cache, sessions, blacklist JWT
+# ============================================================
+redis[asyncio]
+
+# ============================================================
+# 🔍 ELASTICSEARCH 8 — Recherche full-text
+# ============================================================
+elasticsearch[async]==8.13.0
+
+# ============================================================
+# 📦 QDRANT — Base vectorielle (embeddings)
+# ============================================================
+qdrant-client[fastembed]
+
+# ============================================================
+# 🧠 SENTENCE TRANSFORMERS — Modèle PubMedBert
+# ============================================================
+sentence-transformers     # Chargement et inference du modèle
+torch                     # Backend PyTorch
+numpy                     # Calculs vectoriels (similarité cosinus)
+
+# ============================================================
+# 📨 KAFKA — Message queue (événements scraping)
+# ============================================================
+kafka-python
+
+# ============================================================
+# 🤖 GROQ — Llama 3.1 via API (résumés IA)
+# ============================================================
+groq
+
+# ============================================================
+# 🔬 BIOPYTHON — Scraping PubMed (API Entrez)
+# ============================================================
+biopython
+
+# ============================================================
+# 🌐 HTTP — Clients sync et async
+# ============================================================
+httpx                     # Client HTTP async (Celery beat → API interne)
+requests                  # Client HTTP sync (scraping Europe PMC, bioRxiv)
+aiohttp                   # Client HTTP async alternatif
+
+# ============================================================
+# 📧 EMAIL — Envoi SMTP vraiment async
+# ============================================================
+aiosmtplib                # SMTP async natif (pas besoin de run_in_executor)
+
+# ============================================================
+# 🔌 WEBSOCKETS
+# ============================================================
+websockets                # Support WebSocket (inclus aussi dans uvicorn[standard])
+
+# ============================================================
+# FLOWER — monitoring Celery
+# ============================================================
+flower==2.0.1
+
+prometheus-fastapi-instrumentator==6.1.0
+
+
+psycopg2-binary==2.9.9

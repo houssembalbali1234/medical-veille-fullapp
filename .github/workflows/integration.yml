@@ -1,0 +1,58 @@
+name: 🔗 Integration & Docker Compose
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────
+  # Valide que docker-compose.yml est correct
+  # et que tous les services démarrent bien
+  # ─────────────────────────────────────────
+  docker-compose-check:
+    name: 🐳 Docker Compose Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📝 Créer le fichier .env pour les tests
+        run: |
+          # Copie le .env.example ou crée un .env minimal pour CI
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            # Valeurs minimales pour que docker-compose soit valide
+            cat > .env << 'EOF'
+          DATABASE_URL=postgresql://user:password@db:5432/myapp
+          SECRET_KEY=ci-test-secret-key-not-for-production
+          DEBUG=false
+          EOF
+          fi
+
+      - name: ✅ Valider la syntaxe docker-compose.yml
+        run: docker compose config
+
+      - name: 🚀 Démarrer les services
+        run: |
+          docker compose up -d --build
+          # Attendre que les services soient healthy
+          sleep 15
+
+      - name: 🔍 Vérifier que les services tournent
+        run: |
+          docker compose ps
+          # Vérifier qu'aucun service n'a crashé (Exit code != 0)
+          if docker compose ps | grep -E "Exit|exited"; then
+            echo "❌ Un ou plusieurs services ont crashé !"
+            docker compose logs
+            exit 1
+          fi
+          echo "✅ Tous les services sont UP"
+
+      - name: 🧹 Nettoyage
+        if: always()
+        run: docker compose down -v --remove-orphans
