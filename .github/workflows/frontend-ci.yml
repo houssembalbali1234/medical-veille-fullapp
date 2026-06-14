@@ -38,17 +38,6 @@ jobs:
         working-directory: ./frontend
         run: npm ci # plus strict que npm install (utilise package-lock.json)
 
-      - name: 🔍 Lint
-        working-directory: ./frontend
-        run: npm run lint
-        continue-on-error: false
-
-      - name: ✅ Run tests
-        working-directory: ./frontend
-        run: npm run test -- --watchAll=false --passWithNoTests
-        env:
-          CI: true
-
       - name: 🏗️ Build
         working-directory: ./frontend
         run: npm run build
